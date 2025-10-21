@@ -1,0 +1,10 @@
+python-dotenv
+msal
+aiohttp
+microsoft-agents-activity
+microsoft-agents-copilotstudio-client
+flask
+flask-socketio
+flask-session
+python-socketio
+eventlet

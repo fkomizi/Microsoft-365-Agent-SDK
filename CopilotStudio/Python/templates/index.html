@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Copilot Studio Chat</title>
+    <link rel="icon" type="image/x-icon" href="/static/image/favicon.ico">
+    <script src="/static/js/socket.io.min.js"></script>
+    <script src="/static/js/marked.min.js"></script>
+    <!-- Adaptive Cards - Official SDK -->
+    <script src="/static/js/adaptivecards.min.js"></script>
+    <script src="/static/js/adaptivecards-templating.min.js"></script>
+    <link rel="stylesheet" href="/static/css/adaptivecards.css">
+    <style>
+        /* CSS Variables for Light/Dark Mode */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #e8eaed;
+            --text-primary: #1f1f1f;
+            --text-secondary: #5f6368;
+            --border-color: #e8eaed;
+            --message-user-bg: #e3f2fd;
+            --message-bot-bg: #ffffff;
+            --input-bg: #ffffff;
+            --input-border: #dadce0;
+            --button-hover: #f1f3f4;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --card-bg: #ffffff;
+        }
+
+        body.dark-mode {
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2d2d2d;
+            --bg-tertiary: #3d3d3d;
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --border-color: #3d3d3d;
+            --message-user-bg: #1a4d7a;
+            --message-bot-bg: #2d2d2d;
+            --input-bg: #2d2d2d;
+            --input-border: #5f6368;
+            --button-hover: #3d3d3d;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --card-bg: #2d2d2d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .chat-container {
+            background: var(--bg-primary);
+            width: 100%;
+            max-width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-title {
+            font-weight: 400;
+            color: var(--text-secondary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .theme-toggle {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .theme-toggle:hover {
+            background: var(--button-hover);
+        }
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #1a73e8;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px 20px;
+            background: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .chat-messages.has-messages {
+            align-items: stretch;
+        }
+
+        .greeting-text {
+            font-size: 28px;
+            color: var(--text-primary);
+            text-align: center;
+            margin-top: 20vh;
+            font-weight: 400;
+        }
+
+        .message {
+            margin-bottom: 24px;
+            animation: fadeIn 0.3s ease-in;
+            max-width: 768px;
+            margin-left: auto;
+            margin-right: auto;
+            width: 100%;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.bot,
+        .message.system {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .bot-icon {
+            width: 32px;
+            height: 32px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-top: 4px;
+        }
+
+        .message-content {
+            padding: 16px 20px;
+            border-radius: 12px;
+            word-wrap: break-word;
+            line-height: 1.6;
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        .message.user {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .message.user .message-content {
+            background: var(--message-user-bg);
+            border-radius: 20px;
+            max-width: 80%;
+        }
+
+        .message.bot .message-content,
+        .message.system .message-content {
+            background: var(--message-bot-bg);
+            border-radius: 12px;
+            flex: 1;
+        }
+
+        /* Markdown styling */
+        .message-content h1,
+        .message-content h2,
+        .message-content h3,
+        .message-content h4,
+        .message-content h5,
+        .message-content h6 {
+            margin-top: 12px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .message-content h1 { font-size: 1.5em; }
+        .message-content h2 { font-size: 1.3em; }
+        .message-content h3 { font-size: 1.1em; }
+
+        .message-content p {
+            margin: 8px 0;
+        }
+
+        .message-content ul,
+        .message-content ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+
+        .message-content li {
+            margin: 4px 0;
+        }
+
+        .message-content code {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content pre {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+
+        .message-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .message-content blockquote {
+            border-left: 3px solid #667eea;
+            padding-left: 12px;
+            margin: 8px 0;
+            color: #666;
+            font-style: italic;
+        }
+
+        .message-content a {
+            color: #667eea;
+            text-decoration: underline;
+        }
+
+        .message-content a:hover {
+            color: #764ba2;
+        }
+
+        .message-content table {
+            border-collapse: collapse;
+            margin: 8px 0;
+            width: 100%;
+        }
+
+        .message-content table th,
+        .message-content table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .message-content table th {
+            background: rgba(102, 126, 234, 0.1);
+            font-weight: 600;
+        }
+
+        .message-content strong {
+            font-weight: 600;
+        }
+
+        .message-content em {
+            font-style: italic;
+        }
+
+        .message-content hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 12px 0;
+        }
+
+        .message.bot .message-content p:first-child,
+        .message.system .message-content p:first-child {
+            margin-top: 0;
+        }
+
+        .message.bot .message-content p:last-child,
+        .message.system .message-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .suggestions {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .suggestion-chip {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #90caf9;
+        }
+
+        .suggestion-chip:hover {
+            background: #1976d2;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+        }
+
+        .feedback-icons {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+            padding-top: 8px;
+        }
+
+        .feedback-icon {
+            cursor: pointer;
+            font-size: 20px;
+            opacity: 0.5;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .feedback-icon:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .feedback-icon.active {
+            opacity: 1;
+        }
+
+        .feedback-icon.thumbs-up:hover,
+        .feedback-icon.thumbs-up.active {
+            color: #4CAF50;
+        }
+
+        .feedback-icon.thumbs-down:hover,
+        .feedback-icon.thumbs-down.active {
+            color: #f44336;
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: var(--bg-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .input-wrapper {
+            width: 100%;
+            max-width: 768px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            background: var(--bg-secondary);
+            border-radius: 28px;
+            padding: 4px 8px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+
+        .input-wrapper:focus-within {
+            background: var(--input-bg);
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .input-actions-left {
+            display: flex;
+            gap: 4px;
+            margin-right: 8px;
+        }
+
+        .input-button {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: transparent;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            transition: background 0.2s;
+            font-size: 18px;
+        }
+
+        .input-button:hover:not(:disabled) {
+            background: var(--button-hover);
+        }
+
+        .input-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 8px;
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            outline: none;
+            font-family: inherit;
+            color: var(--text-primary);
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .send-button {
+            width: 36px;
+            height: 36px;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+            font-size: 18px;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background: var(--button-hover);
+        }
+
+        .send-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .status-indicator {
+            display: none;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 12px 20px 8px 20px;
+            background: var(--bg-primary);
+        }
+
+        .typing-indicator.active {
+            display: flex;
+            justify-content: center;
+        }
+
+        .typing-indicator-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            max-width: 768px;
+            width: 100%;
+        }
+
+        .typing-dots {
+            display: inline-flex;
+            gap: 6px;
+            padding: 16px 20px;
+            background: var(--message-bot-bg);
+            border-radius: 12px;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #9aa0a6;
+            animation: typing 2s infinite;
+        }
+
+        .typing-indicator-wrapper .bot-icon {
+            margin-top: 4px;
+        }
+
+        .typing-dots span:nth-child(2) {
+            animation-delay: 0.3s;
+        }
+
+        .typing-dots span:nth-child(3) {
+            animation-delay: 0.6s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+            30% {
+                transform: translateY(-6px);
+                opacity: 1;
+            }
+        }
+
+        .loader-bar {
+            display: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Adaptive Cards Styling */
+        .adaptive-card-container {
+            margin-top: 12px;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .ac-container {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--card-bg) !important;
+        }
+
+        .ac-textBlock {
+            color: var(--text-primary) !important;
+            line-height: 1.6;
+        }
+
+        .ac-textBlock strong {
+            font-weight: 600;
+        }
+
+        .ac-textRun {
+            color: var(--text-primary) !important;
+        }
+
+        /* Ensure table text is visible in dark mode */
+        body.dark-mode .ac-textBlock,
+        body.dark-mode .ac-textRun,
+        body.dark-mode .ac-factTitle,
+        body.dark-mode .ac-factValue {
+            color: #e8eaed !important;
+        }
+
+        .ac-pushButton {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .ac-pushButton:hover {
+            background: #1565c0;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .ac-action-openUrl {
+            color: #1976d2;
+            text-decoration: none;
+        }
+
+        .ac-action-openUrl:hover {
+            text-decoration: underline;
+        }
+
+        /* Adaptive Card FactSet styling */
+        .ac-factset {
+            margin: 8px 0;
+        }
+
+        .ac-fact-title {
+            font-weight: 600;
+            margin-right: 8px;
+            color: var(--text-primary) !important;
+        }
+
+        .ac-fact-value {
+            color: var(--text-secondary) !important;
+        }
+
+        /* Dark mode fact set overrides */
+        body.dark-mode .ac-fact-title {
+            color: #e8eaed !important;
+        }
+
+        body.dark-mode .ac-fact-value {
+            color: #9aa0a6 !important;
+        }
+
+        /* Adaptive Card Column styling */
+        .ac-columnSet {
+            width: 100%;
+        }
+
+        .ac-column {
+            padding: 4px;
+        }
+
+        /* Dark mode comprehensive adaptive cards styling */
+        body.dark-mode .ac-container,
+        body.dark-mode .ac-columnSet,
+        body.dark-mode .ac-column {
+            color: #e8eaed !important;
+        }
+
+        body.dark-mode .ac-textBlock p,
+        body.dark-mode .ac-textBlock div,
+        body.dark-mode .ac-textBlock span,
+        body.dark-mode .ac-container p,
+        body.dark-mode .ac-container div,
+        body.dark-mode .ac-container span {
+            color: #e8eaed !important;
+        }
+
+        /* Table styling for adaptive cards */
+        .ac-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 8px 0;
+        }
+
+        .ac-tableCell {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary) !important;
+        }
+
+        body.dark-mode .ac-table {
+            border-color: #444 !important;
+        }
+
+        body.dark-mode .ac-tableCell,
+        body.dark-mode .ac-tableCell p,
+        body.dark-mode .ac-tableCell div,
+        body.dark-mode .ac-tableCell span {
+            color: #e8eaed !important;
+            border-color: #444 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="header-left">
+                <span class="header-title">Copilot Studio</span>
+            </div>
+            <div class="header-right">
+                <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">
+                    <span id="themeIcon">🌙</span>
+                </button>
+                <div class="user-avatar" id="userAvatar"></div>
+            </div>
+        </div>
+        <div class="status-indicator" id="status">Connecting...</div>
+        <div class="chat-messages" id="messages">
+            <div class="greeting-text" id="greeting"></div>
+        </div>
+        <div class="typing-indicator" id="typing">
+            <div class="typing-indicator-wrapper">
+                <div class="bot-icon">✨</div>
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+        <div class="loader-bar" id="loaderBar">
+            <div class="loader-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+        <div class="chat-input-container">
+            <div class="input-wrapper">
+                <div class="input-actions-left">
+                    <button class="input-button" id="addButton" title="Add" disabled>
+                        <span>+</span>
+                    </button>
+                </div>
+                <input
+                    type="text"
+                    class="chat-input"
+                    id="messageInput"
+                    placeholder="Ask Copilot..."
+                >
+                <button class="send-button" id="sendButton" title="Send">
+                    <span>⮕</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration from server
+        const SHOW_FEEDBACK = {{ 'true' if show_feedback else 'false' }};
+
+        const socket = io();
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const statusIndicator = document.getElementById('status');
+        const typingIndicator = document.getElementById('typing');
+        const loaderBar = document.getElementById('loaderBar');
+        const greetingText = document.getElementById('greeting');
+        const userAvatar = document.getElementById('userAvatar');
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        let hasMessages = false;
+
+        // Theme Management
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                themeIcon.textContent = '☀️';
+            } else {
+                document.body.classList.remove('dark-mode');
+                themeIcon.textContent = '🌙';
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            themeIcon.textContent = isDark ? '☀️' : '🌙';
+        }
+
+        // Initialize theme on page load
+        initTheme();
+
+        // Add theme toggle event listener
+        themeToggle.addEventListener('click', toggleTheme);
+
+        // Initial state - inputs should be disabled until connected and initialized
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function hideGreeting() {
+            if (greetingText) {
+                greetingText.style.display = 'none';
+            }
+            if (!hasMessages) {
+                messagesContainer.classList.add('has-messages');
+                hasMessages = true;
+            }
+        }
+
+        function renderAdaptiveCard(attachment) {
+            try {
+                if (attachment.content_type === 'application/vnd.microsoft.card.adaptive' && attachment.content) {
+                    // Enable markdown processing using the marked library
+                    AdaptiveCards.AdaptiveCard.onProcessMarkdown = function(text, result) {
+                        result.outputHtml = marked.parse(text);
+                        result.didProcess = true;
+                    };
+
+                    // Create a new AdaptiveCard instance using the official SDK
+                    const adaptiveCard = new AdaptiveCards.AdaptiveCard();
+
+                    // Detect dark mode and configure colors
+                    const isDarkMode = document.body.classList.contains('dark-mode');
+
+                    // Set host config for better styling with dark mode support
+                    const hostConfig = new AdaptiveCards.HostConfig({
+                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif"
+                    });
+
+                    // Configure container styles for dark mode
+                    if (isDarkMode) {
+                        hostConfig.containerStyles.default.backgroundColor = "#2d2d2d";
+                        hostConfig.containerStyles.default.foregroundColors = {
+                            default: { default: "#e8eaed", subtle: "#9aa0a6" },
+                            dark: { default: "#e8eaed", subtle: "#9aa0a6" },
+                            light: { default: "#e8eaed", subtle: "#9aa0a6" },
+                            accent: { default: "#64b5f6", subtle: "#42a5f5" },
+                            good: { default: "#81c784", subtle: "#66bb6a" },
+                            warning: { default: "#ffb74d", subtle: "#ffa726" },
+                            attention: { default: "#e57373", subtle: "#ef5350" }
+                        };
+                    }
+
+                    adaptiveCard.hostConfig = hostConfig;
+
+                    // Handle action execution (for buttons, links, etc.)
+                    adaptiveCard.onExecuteAction = function(action) {
+                        // Handle different action types
+                        if (action instanceof AdaptiveCards.OpenUrlAction) {
+                            window.open(action.url, '_blank');
+                        } else if (action instanceof AdaptiveCards.SubmitAction) {
+                            // Send submit data to the server or handle it as needed
+                            if (action.data && action.data.message) {
+                                messageInput.value = action.data.message;
+                                sendMessage();
+                            }
+                        }
+                    };
+
+                    // Parse the card payload
+                    adaptiveCard.parse(attachment.content);
+
+                    // Render the card and return the HTML element
+                    const renderedCard = adaptiveCard.render();
+
+                    if (!renderedCard) {
+                        console.error('Failed to render adaptive card - render() returned null');
+                        return null;
+                    }
+
+                    return renderedCard;
+                }
+            } catch (error) {
+                console.error('Error rendering adaptive card:', error);
+                console.error('Card content:', attachment.content);
+            }
+            return null;
+        }
+
+        function addMessage(text, type, suggestions = null, attachments = null) {
+            hideGreeting();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            // Add bot icon for bot and system messages
+            if (type === 'bot' || type === 'system') {
+                const iconDiv = document.createElement('div');
+                iconDiv.className = 'bot-icon';
+                iconDiv.innerHTML = '✨';
+                messageDiv.appendChild(iconDiv);
+            }
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            // Render markdown for bot and system messages, plain text for user messages
+            if (type === 'bot' || type === 'system') {
+                if (text) {
+                    contentDiv.innerHTML = marked.parse(text);
+                }
+
+                // Render adaptive cards if present
+                if (attachments && attachments.length > 0) {
+                    attachments.forEach((attachment, index) => {
+                        const renderedCard = renderAdaptiveCard(attachment);
+                        if (renderedCard) {
+                            const cardContainer = document.createElement('div');
+                            cardContainer.className = 'adaptive-card-container';
+                            cardContainer.appendChild(renderedCard);
+                            contentDiv.appendChild(cardContainer);
+                        } else {
+                            console.warn(`Attachment ${index + 1} failed to render`);
+                        }
+                    });
+                }
+
+                // Add feedback icons for bot and system messages (if enabled)
+                if (SHOW_FEEDBACK) {
+                    const feedbackDiv = document.createElement('div');
+                    feedbackDiv.className = 'feedback-icons';
+
+                    const thumbsUp = document.createElement('span');
+                    thumbsUp.className = 'feedback-icon thumbs-up';
+                    thumbsUp.innerHTML = '👍';
+                    thumbsUp.onclick = function() {
+                        this.classList.toggle('active');
+                        thumbsDown.classList.remove('active');
+                    };
+
+                    const thumbsDown = document.createElement('span');
+                    thumbsDown.className = 'feedback-icon thumbs-down';
+                    thumbsDown.innerHTML = '👎';
+                    thumbsDown.onclick = function() {
+                        this.classList.toggle('active');
+                        thumbsUp.classList.remove('active');
+                    };
+
+                    feedbackDiv.appendChild(thumbsUp);
+                    feedbackDiv.appendChild(thumbsDown);
+                    contentDiv.appendChild(feedbackDiv);
+                }
+            } else {
+                contentDiv.textContent = text;
+            }
+
+            messageDiv.appendChild(contentDiv);
+
+            if (suggestions && suggestions.length > 0) {
+                const suggestionsDiv = document.createElement('div');
+                suggestionsDiv.className = 'suggestions';
+                suggestions.forEach(suggestion => {
+                    const chip = document.createElement('div');
+                    chip.className = 'suggestion-chip';
+                    chip.textContent = suggestion;
+                    chip.onclick = () => {
+                        messageInput.value = suggestion;
+                        sendMessage();
+                    };
+                    suggestionsDiv.appendChild(chip);
+                });
+                messageDiv.appendChild(suggestionsDiv);
+            }
+
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function setStatus(message, isError = false) {
+            statusIndicator.textContent = message;
+            statusIndicator.className = `status-indicator ${isError ? 'error' : 'connected'}`;
+        }
+
+        function showTyping() {
+            typingIndicator.classList.add('active');
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+        }
+
+        function hideTyping() {
+            typingIndicator.classList.remove('active');
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message && socket.connected) {
+                socket.emit('send_message', { message });
+                messageInput.value = '';
+                showTyping();
+            }
+        }
+
+        socket.on('connect', () => {
+            setStatus('Connected');
+            // Don't show typing here - the init event may have already fired
+            // and we don't want to re-disable inputs after they're enabled
+        });
+
+        socket.on('init', (data) => {
+            // Hide typing indicator
+            hideTyping();
+
+            // Set user avatar
+            if (data.username) {
+                userAvatar.textContent = data.username.charAt(0).toUpperCase();
+            }
+            // Show welcome message as a bot message with attachments if present
+            // Show message if there's text OR attachments
+            if (data.greeting || data.attachments) {
+                addMessage(data.greeting || '', 'bot', null, data.attachments);
+            }
+        });
+
+        socket.on('disconnect', () => {
+            setStatus('Disconnected', true);
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+        });
+
+        socket.on('message', (data) => {
+            // Don't show initial system messages, just update greeting
+            if (data.isInitial && data.type === 'system') {
+                if (data.greeting) {
+                    greetingText.textContent = data.greeting;
+                }
+                return;
+            }
+
+            // Only hide typing indicator for bot messages, keep it showing for user echo
+            if (data.type === 'bot' || data.type === 'system') {
+                hideTyping();
+            }
+
+            addMessage(data.text, data.type, data.suggestions, data.attachments);
+
+            if (data.end) {
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            }
+        });
+
+        socket.on('error', (data) => {
+            hideTyping();
+            setStatus(`Error: ${data.message}`, true);
+            addMessage(`Error: ${data.message}`, 'system');
+        });
+
+        sendButton.addEventListener('click', sendMessage);
+
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Focus input on load
+        window.addEventListener('load', () => {
+            messageInput.focus();
+        });
+    </script>
+</body>
+</html>
